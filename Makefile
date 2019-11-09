@@ -12,16 +12,22 @@ SSID_FREQ               := $(shell sh -c 'echo `hostname` | sed "s/.*-//"')
 
 # ----------------------------------------------------------------------------
 
+IMAGE_NAME := 'ibmosquito/ssidmon:1.0.0'
+
 all: build run
 
 # Build the docker container
 build:
-	docker build -t ssid -f ./Dockerfile .
+	docker build -t $(IMAGE_NAME) -f ./Dockerfile .
+
+# Push the docker container to DockerHub
+push:
+	docker push $(IMAGE_NAME)
 
 # Remove the local container image
 clean:
-	-docker rm -f ssid 2>/dev/null || :
-	-docker rmi -f ssid 2>/dev/null || :
+	-docker rm -f $(IMAGE_NAME) 2>/dev/null || :
+	-docker rmi -f $(IMAGE_NAME) 2>/dev/null || :
 
 # ----------------------------------------------------------------------------
 
@@ -33,7 +39,7 @@ dev:
             -e SSID_FREQ=$(SSID_FREQ) \
             -e LOCAL_ROUTER_ADDRESS=$(LOCAL_ROUTER_ADDRESS) \
             -e LOCAL_IP_ADDRESS=$(LOCAL_IP_ADDRESS) \
-            ssid /bin/sh
+            $(IMAGE_NAME) /bin/sh
 
 run:
 	-docker rm -f ssid 2>/dev/null || :
@@ -43,5 +49,5 @@ run:
             -e SSID_FREQ=$(SSID_FREQ) \
             -e LOCAL_ROUTER_ADDRESS=$(LOCAL_ROUTER_ADDRESS) \
             -e LOCAL_IP_ADDRESS=$(LOCAL_IP_ADDRESS) \
-            ssid
+            $(IMAGE_NAME)
 

@@ -29,7 +29,8 @@ FLASK_PORT = 6006
 
 
 # Global for the cached data
-MAX_CACHE = 12 * 60
+SECS_BETWEEN_SAMPLES = 5
+MAX_CACHE = (24 * 60 * 60 / SECS_BETWEEN_SAMPLES)  # Approx one day of samples
 lan_cache = deque([])
 wan_cache = deque([])
 
@@ -55,11 +56,11 @@ if __name__ == '__main__':
         # print(str(last_lan))
         if (len(lan_cache) > MAX_CACHE):
           trash = lan_cache.popleft()
-        utc_secs_since_epoch = int(time.mktime(datetime.utcnow().timetuple()) * 1000)
+        utc_secs_since_epoch = int(time.mktime(datetime.utcnow().timetuple()))
         rec = '{"date":' + str(utc_secs_since_epoch) + ',"target":"' + LOCAL_ROUTER_ADDRESS + '","result":' + last_lan + '}'
         lan_cache.append(rec)
-        # print("\nSleeping for " + str(5) + " seconds...\n")
-        time.sleep(5)
+        # print("\nSleeping for " + str(SECS_BETWEEN_SAMPLES) + " seconds...\n")
+        time.sleep(SECS_BETWEEN_SAMPLES)
 
   # Loop forever checking WAN connectivity
   class WanThread(threading.Thread):
@@ -76,11 +77,11 @@ if __name__ == '__main__':
         # print(str(last_wan))
         if (len(wan_cache) > MAX_CACHE):
           trash = wan_cache.popleft()
-        utc_secs_since_epoch = int(time.mktime(datetime.utcnow().timetuple()) * 1000)
+        utc_secs_since_epoch = int(time.mktime(datetime.utcnow().timetuple()))
         rec = '{"date":' + str(utc_secs_since_epoch) + ',"target":"' + EXTERNAL_PROBE_TARGET + '","result":' + last_wan + '}'
         wan_cache.append(rec)
-        # print("\nSleeping for " + str(5) + " seconds...\n")
-        time.sleep(5)
+        # print("\nSleeping for " + str(SECS_BETWEEN_SAMPLES) + " seconds...\n")
+        time.sleep(SECS_BETWEEN_SAMPLES)
 
   @webapp.route("/")
   def get_page():
