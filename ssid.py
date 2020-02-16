@@ -116,18 +116,12 @@ def get_page():
     '"freq":"' + SSID_FREQ + '",' + \
     '"LAN-target":"' + LOCAL_ROUTER_ADDRESS + '",' + \
     '"WAN-target":"' + EXTERNAL_PROBE_TARGET + '",' + \
-    '"LAN":['
-  infix = '],"WAN":['
+    '"results":['
   suffix = ']}'
   rec = prefix
-  while (len(lan_cache) > 0):
-    rec += lan_cache.popleft()
-    if (len(lan_cache) > 0):
-      rec += ','
-  rec += infix
-  while (len(wan_cache) > 0):
-    rec += wan_cache.popleft()
-    if (len(wan_cache) > 0):
+  while (len(cache) > 0):
+    rec += cache.popleft()
+    if (len(cache) > 0):
       rec += ','
   rec += suffix
   return rec
