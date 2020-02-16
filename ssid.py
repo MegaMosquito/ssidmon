@@ -14,6 +14,10 @@ from datetime import datetime
 from collections import deque
 
 
+# Import the GPIO library so python can work with the GPIO pins
+import RPi.GPIO as GPIO
+
+
 # These values need to be provided from the host
 SSID_NAME = os.environ['SSID_NAME']
 SSID_FREQ = os.environ['SSID_FREQ']
@@ -22,6 +26,20 @@ LOCAL_IP_ADDRESS      = os.environ['LOCAL_IP_ADDRESS']
 
 # External probing target
 EXTERNAL_PROBE_TARGET = 'https://www.google.com/'
+
+# Probe timeout
+PROBE_TIMEOUT_SEC = 5
+
+# Setup the GPIO's that the RGB LED is attached to
+PIN_GREEN_LED = 14
+PIN_RED_LED = 15
+GPIO.setwarnings(True)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(PIN_GREEN_LED, GPIO.OUT)
+GPIO.setup(PIN_RED_LED, GPIO.OUT)
+GPIO.output(PIN_GREEN_LED, GPIO.LOW)
+GPIO.output(PIN_RED_LED, GPIO.LOW)
+SECS_LED = 1
 
 
 # Setup Flask web server
@@ -33,57 +51,72 @@ webapp = Flask('ssidmon')
 
 
 # Global for the cached data
-SECS_BETWEEN_SAMPLES = 5
-MAX_CACHE = (24 * 60 * 60 / SECS_BETWEEN_SAMPLES)  # Approx one day of samples
-lan_cache = deque([])
-wan_cache = deque([])
+SLEEP_BETWEEN_CHECKS_SEC = 5
+MAX_CACHE = (24 * 60 * 60 / SLEEP_BETWEEN_CHECKS_SEC)  # Approx one day of samples
+cache = deque([])
+last_lan = "false"
+last_wan = "false"
 
 
-# Loop forever checking LAN connectivity
-class LanThread(threading.Thread):
+# Loop forever checking LAN and WAN connectivity
+class MonThread(threading.Thread):
   def run(self):
-    global lan_cache
-    # print("\nWAN monitor thread started!")
+    global cache
+    global last_lan
+    global last_wan
+    # print("\nMonitor thread started!")
     LAN_COMMAND = 'curl -sS ' + LOCAL_ROUTER_ADDRESS + ' 2>/dev/null | wc -l'
+    WAN_COMMAND = 'curl -sS ' + EXTERNAL_PROBE_TARGET + ' 2>/dev/null | wc -l'
     while True:
-      yes_no = str(subprocess.check_output(LAN_COMMAND, shell=True)).strip()
-      # print("\n\nWAN check = " + yes_no)
+      # print("Checking...")
+      # LAN
+      yes_no = 'X'
+      try:
+        yes_no = (subprocess.check_output(LAN_COMMAND, timeout=PROBE_TIMEOUT_SEC, shell=True)).decode('UTF-8').strip()
+      except:
+        pass
+      # print("LAN check = " + yes_no)
       last_lan = "false"
       if (yes_no != "0"):
         last_lan = "true"
       # print(str(last_lan))
-      if (len(lan_cache) > MAX_CACHE):
-        trash = lan_cache.popleft()
-      utc_secs_since_epoch = int(time.mktime(datetime.utcnow().timetuple()))
-      rec = '{"date":' + str(utc_secs_since_epoch) + ',"target":"' + LOCAL_ROUTER_ADDRESS + '","result":' + last_lan + '}'
-      lan_cache.append(rec)
-      # print("\nSleeping for " + str(SECS_BETWEEN_SAMPLES) + " seconds...\n")
-      time.sleep(SECS_BETWEEN_SAMPLES)
-
-# Loop forever checking WAN connectivity
-class WanThread(threading.Thread):
-  def run(self):
-    global wan_cache
-    # print("\nWAN monitor thread started!")
-    WAN_COMMAND = 'curl -sS ' + EXTERNAL_PROBE_TARGET + ' 2>/dev/null | wc -l'
-    while True:
-      yes_no = str(subprocess.check_output(WAN_COMMAND, shell=True)).strip()
-      # print("\n\nWAN check = " + yes_no)
+      # WAN
+      yes_no = 'X'
+      try:
+        yes_no = (subprocess.check_output(WAN_COMMAND, timeout=PROBE_TIMEOUT_SEC, shell=True)).decode('UTF-8').strip()
+      except:
+        pass
+      # print("WAN check = " + yes_no)
       last_wan = "false"
       if (yes_no != "0"):
         last_wan = "true"
       # print(str(last_wan))
-      if (len(wan_cache) > MAX_CACHE):
-        trash = wan_cache.popleft()
+      # Cache
+      if (len(cache) > MAX_CACHE):
+        trash = cache.popleft()
       utc_secs_since_epoch = int(time.mktime(datetime.utcnow().timetuple()))
-      rec = '{"date":' + str(utc_secs_since_epoch) + ',"target":"' + EXTERNAL_PROBE_TARGET + '","result":' + last_wan + '}'
-      wan_cache.append(rec)
-      # print("\nSleeping for " + str(SECS_BETWEEN_SAMPLES) + " seconds...\n")
-      time.sleep(SECS_BETWEEN_SAMPLES)
+      rec = '{"date":' + str(utc_secs_since_epoch) + ',"lan":' + last_lan + ',"wan":' + last_wan + '}'
+      cache.append(rec)
+      # Turn off both red and green "filaments" in the RGB LED
+      GPIO.output(PIN_RED_LED, GPIO.LOW)
+      GPIO.output(PIN_GREEN_LED, GPIO.LOW)
+      # Wait for 1/10 second before turning one of them back on
+      time.sleep(0.1)
+      if "true" == last_lan and "true" == last_wan:
+        GPIO.output(PIN_GREEN_LED, GPIO.HIGH)
+      else:
+        GPIO.output(PIN_RED_LED, GPIO.HIGH)
+      # print("\nSleeping for " + str(SLEEP_BETWEEN_CHECKS_SEC) + " seconds...\n")
+      time.sleep(SLEEP_BETWEEN_CHECKS_SEC)
 
 @webapp.route("/")
 def get_page():
-  prefix = '{"SSID":"' + SSID_NAME + '","freq":"' + SSID_FREQ + '","LAN":['
+  prefix = '{' + \
+    '"SSID":"' + SSID_NAME + '",' + \
+    '"freq":"' + SSID_FREQ + '",' + \
+    '"LAN-target":"' + LOCAL_ROUTER_ADDRESS + '",' + \
+    '"WAN-target":"' + EXTERNAL_PROBE_TARGET + '",' + \
+    '"LAN":['
   infix = '],"WAN":['
   suffix = ']}'
   rec = prefix
@@ -111,9 +144,8 @@ def add_header(r):
 # Main program (instantiates and starts polling threads and then web server)
 if __name__ == '__main__':
 
-  lanmon = LanThread()
-  lanmon.start()
-  wanmon = WanThread()
-  wanmon.start()
+  mon = MonThread()
+  mon.start()
   webapp.run(host=FLASK_BIND_ADDRESS, port=FLASK_PORT)
+
 

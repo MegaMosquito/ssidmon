@@ -33,7 +33,9 @@ clean:
 
 dev:
 	-docker rm -f ssid 2>/dev/null || :
-	docker run -it -p 0.0.0.0:8000:6006 \
+	docker run -it --privileged \
+            -p 0.0.0.0:8000:6006 \
+            -v `pwd`:/outside \
             --name ssid --restart unless-stopped \
             -e SSID_NAME=$(SSID_NAME) \
             -e SSID_FREQ=$(SSID_FREQ) \
@@ -41,13 +43,20 @@ dev:
             -e LOCAL_IP_ADDRESS=$(LOCAL_IP_ADDRESS) \
             $(IMAGE_NAME) /bin/sh
 
+devtest:
+	curl -sS localhost:8000 | jq
+
 run:
 	-docker rm -f ssid 2>/dev/null || :
-	docker run -d -p 0.0.0.0:80:6006 \
+	docker run -d --privileged \
+            -p 0.0.0.0:80:6006 \
             --name ssid --restart unless-stopped \
             -e SSID_NAME=$(SSID_NAME) \
             -e SSID_FREQ=$(SSID_FREQ) \
             -e LOCAL_ROUTER_ADDRESS=$(LOCAL_ROUTER_ADDRESS) \
             -e LOCAL_IP_ADDRESS=$(LOCAL_IP_ADDRESS) \
             $(IMAGE_NAME)
+
+test:
+	curl -sS localhost:80 | jq
 
