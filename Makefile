@@ -37,6 +37,7 @@ dev:
             -p 0.0.0.0:8000:6006 \
             -v `pwd`:/outside \
             --name ssid --restart unless-stopped \
+            -v /proc/sysrq-trigger:/sysrq \
             -e SSID_NAME="$(SSID_NAME)" \
             -e SSID_FREQ=$(SSID_FREQ) \
             -e LOCAL_ROUTER_ADDRESS=$(LOCAL_ROUTER_ADDRESS) \
@@ -51,6 +52,7 @@ run:
 	docker run -d --privileged \
             -p 0.0.0.0:80:6006 \
             --name ssid --restart unless-stopped \
+            -v /proc/sysrq-trigger:/sysrq \
             -e SSID_NAME="$(SSID_NAME)" \
             -e SSID_FREQ=$(SSID_FREQ) \
             -e LOCAL_ROUTER_ADDRESS=$(LOCAL_ROUTER_ADDRESS) \
