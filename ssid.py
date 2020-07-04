@@ -110,6 +110,8 @@ class MonThread(threading.Thread):
       time.sleep(SLEEP_BETWEEN_CHECKS_SEC)
 
 def reboot():
+  # NOTE: This code requires the container to mount the sysrq trigger, e.g.:
+  #       docker run ... -v /proc/sysrq-trigger:/sysrq ...
   # Before reboot, must sync all mounted filesystems
   os.system('sh -c "echo s > /sysrq"')
   # Then remount all mounted filesystems read-only so we can continue
